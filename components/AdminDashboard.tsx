@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { Trash2, Edit2, Download, Search } from 'lucide-react';
 import EditLogModal from './EditLogModal';
+import ReportingWidget from './ReportingWidget';
 
 interface TimeLog {
     _id: string;
@@ -126,7 +127,10 @@ export default function AdminDashboard() {
                         Export CSV
                     </button>
                 </div>
-            </header>
+        </div>
+            </header >
+
+            <ReportingWidget />
 
             <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-800 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -193,6 +197,6 @@ export default function AdminDashboard() {
                 log={editingLog}
                 onSave={handleUpdate}
             />
-        </div>
+        </div >
     );
 }
