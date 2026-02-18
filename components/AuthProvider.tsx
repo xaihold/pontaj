@@ -23,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     isAdmin: false,
+    isOwner: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
