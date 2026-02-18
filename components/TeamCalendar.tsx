@@ -16,8 +16,13 @@ interface Schedule {
     isOffDay: boolean;
 }
 
+import { useAuth } from './AuthProvider'; // Ensure this import exists
+
+// ... imports
+
 export default function TeamCalendar() {
     const router = useRouter();
+    const { user } = useAuth(); // Get user for locationId
     const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [users, setUsers] = useState<{ userId: string, userName: string }[]>([]);
@@ -30,19 +35,23 @@ export default function TeamCalendar() {
     });
 
     useEffect(() => {
-        fetchData();
-    }, [currentWeekStart]);
+        if (user?.locationId) {
+            fetchData();
+        }
+    }, [currentWeekStart, user?.locationId]);
 
     const fetchData = async () => {
+        if (!user?.locationId) return;
+
         setLoading(true);
         try {
             const start = format(daysOfWeek[0], 'yyyy-MM-dd');
             const end = format(daysOfWeek[6], 'yyyy-MM-dd');
 
-            // Parallel fetch: Users (all) and Schedules (week)
+            // Parallel fetch: Users (filtered by location) and Schedules (filtered by location)
             const [usersRes, schedRes] = await Promise.all([
-                fetch('/api/users'),
-                fetch(`/api/schedule?mode=all&start=${start}&end=${end}`)
+                fetch(`/api/users?locationId=${user.locationId}`),
+                fetch(`/api/schedule?mode=all&start=${start}&end=${end}&locationId=${user.locationId}`)
             ]);
 
             if (usersRes.ok) {
@@ -71,15 +80,33 @@ export default function TeamCalendar() {
         const dateStr = format(date, 'yyyy-MM-dd');
         return users.map(u => {
             const definedSched = scheduleMap[u.userId]?.[dateStr];
-            // If explicit schedule exists, use it. If not, assume default off or missing?
-            // User requested "setat sau nu". If not set, we can show as missing or standard.
-            // Let's stick to what we have in DB.
+
+            // Logic:
+            // 1. If schedule defined in DB, obey it.
+            // 2. If not defined:
+            //    - Weekend (Sat/Sun) -> Default OFF
+            //    - Weekday (Mon-Fri) -> Default ON (Working)
+
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            let isOffDay = false;
+            let startTime = '09:00'; // Defaults
+            let endTime = '17:00';
+
+            if (definedSched) {
+                isOffDay = definedSched.isOffDay;
+                startTime = definedSched.startTime;
+                endTime = definedSched.endTime;
+            } else {
+                // No schedule, apply defaults
+                isOffDay = isWeekend; // True if Sat/Sun, False if Mon-Fri
+            }
+
             return {
                 userId: u.userId,
                 userName: u.userName,
-                startTime: definedSched?.startTime || '-',
-                endTime: definedSched?.endTime || '-',
-                isOffDay: definedSched?.isOffDay ?? true // Default to off/unset if not found
+                startTime: isOffDay ? '-' : startTime,
+                endTime: isOffDay ? '-' : endTime,
+                isOffDay
             };
         });
     };

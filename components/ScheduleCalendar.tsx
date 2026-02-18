@@ -17,9 +17,10 @@ interface Props {
     userId: string;
     userName: string;
     isAdmin?: boolean;
+    locationId?: string;
 }
 
-export default function ScheduleCalendar({ userId, userName, isAdmin }: Props) {
+export default function ScheduleCalendar({ userId, userName, isAdmin, locationId }: Props) {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [loading, setLoading] = useState(true);
@@ -91,7 +92,8 @@ export default function ScheduleCalendar({ userId, userName, isAdmin }: Props) {
                     dateString,
                     startTime,
                     endTime,
-                    isOffDay
+                    isOffDay,
+                    locationId // Pass it to save
                 }),
             });
 
