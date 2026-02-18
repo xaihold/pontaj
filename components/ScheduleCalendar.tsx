@@ -143,7 +143,10 @@ export default function ScheduleCalendar({ userId, userName, isAdmin, locationId
                     </div>
                 ))}
 
-                {/* Placeholder for empty days at start of month would go here, simplified for now */}
+                {/* Empty slots for start of month alignment (Monday start) */}
+                {Array.from({ length: (startOfMonth(currentMonth).getDay() + 6) % 7 }).map((_, i) => (
+                    <div key={`empty-${i}`} className="h-14"></div>
+                ))}
 
                 {daysInMonth.map(date => {
                     const sched = getDaySchedule(date);
