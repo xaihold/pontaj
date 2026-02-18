@@ -127,8 +127,7 @@ export default function AdminDashboard() {
                         Export CSV
                     </button>
                 </div>
-        </div>
-            </header >
+            </header>
 
             <ReportingWidget />
 
