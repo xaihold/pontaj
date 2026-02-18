@@ -14,15 +14,15 @@ interface TeamMember {
 }
 
 export default function TeamManagement() {
-    const { user, isOwner } = useAuth();
+    const { user, isOwner, isAdmin } = useAuth();
     const [members, setMembers] = useState<TeamMember[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (isOwner) {
+        if (isAdmin || isOwner) {
             fetchMembers();
         }
-    }, [isOwner]);
+    }, [isAdmin, isOwner]);
 
     const fetchMembers = async () => {
         setLoading(true);
@@ -87,7 +87,7 @@ export default function TeamManagement() {
         }
     };
 
-    if (!isOwner) return null;
+    // if (!isOwner) return null; // Removed to allow viewing by Admins
 
     return (
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-sm border border-zinc-100 dark:border-zinc-800">
@@ -106,7 +106,7 @@ export default function TeamManagement() {
                                 <th className="p-3 font-medium">Nume</th>
                                 <th className="p-3 font-medium">Email</th>
                                 <th className="p-3 font-medium text-center">Rol Actual</th>
-                                <th className="p-3 font-medium text-right">Actiuni</th>
+                                {isOwner && <th className="p-3 font-medium text-right">Actiuni</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -120,41 +120,43 @@ export default function TeamManagement() {
                                     <td className="p-3 text-zinc-500">{member.email}</td>
                                     <td className="p-3 text-center">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${member.isOwner ? 'bg-amber-100 text-amber-700' :
-                                                member.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
-                                                    'bg-zinc-100 text-zinc-600'
+                                            member.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
+                                                'bg-zinc-100 text-zinc-600'
                                             }`}>
                                             {member.isOwner ? 'OWNER' : member.role.toUpperCase()}
                                         </span>
                                     </td>
-                                    <td className="p-3 text-right">
-                                        {!member.isOwner && (
-                                            <div className="flex justify-end gap-2">
-                                                {member.role === 'user' ? (
-                                                    <button
-                                                        onClick={() => handleRoleChange(member.userId, 'admin')}
-                                                        className="px-3 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded text-xs"
-                                                    >
-                                                        Fa Admin
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleRoleChange(member.userId, 'user')}
-                                                        className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded text-xs"
-                                                    >
-                                                        Revoca Admin
-                                                    </button>
-                                                )}
+                                    {isOwner && (
+                                        <td className="p-3 text-right">
+                                            {!member.isOwner && (
+                                                <div className="flex justify-end gap-2">
+                                                    {member.role === 'user' ? (
+                                                        <button
+                                                            onClick={() => handleRoleChange(member.userId, 'admin')}
+                                                            className="px-3 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded text-xs"
+                                                        >
+                                                            Fa Admin
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleRoleChange(member.userId, 'user')}
+                                                            className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded text-xs"
+                                                        >
+                                                            Revoca Admin
+                                                        </button>
+                                                    )}
 
-                                                <button
-                                                    onClick={() => handleTransferOwnership(member.userId)}
-                                                    className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs text-zinc-600"
-                                                    title="Transfera drepturile de Owner"
-                                                >
-                                                    Transfera Owner
-                                                </button>
-                                            </div>
-                                        )}
-                                    </td>
+                                                    <button
+                                                        onClick={() => handleTransferOwnership(member.userId)}
+                                                        className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs text-zinc-600"
+                                                        title="Transfera drepturile de Owner"
+                                                    >
+                                                        Transfera Owner
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
