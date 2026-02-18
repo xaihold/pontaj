@@ -78,10 +78,10 @@ export async function POST(request: Request) {
                 });
                 stats.added++;
             } else {
-                // Update basic info, do NOT touch roles/ownership
+                // Update basic info AND ensure locationId is set
                 existingUser.userName = userName;
                 existingUser.email = email;
-                // existingUser.locationId = locationId; // Ensure location is set?
+                existingUser.locationId = locationId; // Force update location to match current sync
                 await existingUser.save();
                 stats.updated++;
             }
