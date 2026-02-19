@@ -8,7 +8,9 @@ export default function GHLSyncButton() {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [apiKey, setApiKey] = useState('');
+    const [agencyApiKey, setAgencyApiKey] = useState('');
     const [hasSavedKey, setHasSavedKey] = useState(false);
+    const [hasSavedAgencyKey, setHasSavedAgencyKey] = useState(false);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [message, setMessage] = useState('');
@@ -18,13 +20,16 @@ export default function GHLSyncButton() {
             // Check if we have a key saved
             fetch(`/api/users/sync-ghl?locationId=${user.locationId}`)
                 .then(res => res.json())
-                .then(data => setHasSavedKey(data.hasKey))
+                .then(data => {
+                    setHasSavedKey(data.hasKey);
+                    setHasSavedAgencyKey(data.hasAgencyKey);
+                })
                 .catch(console.error);
         }
     }, [isOpen, user?.locationId]);
 
     const handleSync = async () => {
-        if (!apiKey && !hasSavedKey) return;
+        if (!apiKey && !hasSavedKey && !agencyApiKey && !hasSavedAgencyKey) return;
 
         setLoading(true);
         setStatus('idle');
@@ -36,6 +41,7 @@ export default function GHLSyncButton() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     apiKey, // Can be empty if we have saved key
+                    agencyApiKey,
                     locationId: user?.locationId,
                     updatedBy: user?.userName
                 })
@@ -89,43 +95,44 @@ export default function GHLSyncButton() {
                         </div>
 
                         <div className="space-y-4">
-                            {hasSavedKey ? (
-                                <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded-lg text-sm flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span>Exista o cheie salvată pentru această locație. Poți lăsa câmpul gol.</span>
-                                </div>
-                            ) : (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 p-3 rounded-lg text-sm">
-                                    Introdu <strong>Location API Key</strong> o singură dată. Acesta va fi salvat pentru viitoare sincronizări.
-                                </div>
-                            )}
-
+                            {/* Location Key Section */}
                             <div>
-                                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                                    API Key {hasSavedKey && '(Opțional)'}
-                                </label>
-                                <input
-                                    type="text"
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder={hasSavedKey ? "Cheie existenta..." : "ex: pit-..."}
-                                    className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-mono"
-                                />
+                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-2">1. Staff Locație</h4>
+                                {hasSavedKey ? (
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded-lg text-sm flex items-center gap-2 mb-2">
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span>Cheie salvată.</span>
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={apiKey}
+                                        onChange={(e) => setApiKey(e.target.value)}
+                                        placeholder="Location API Key (GHL V1)"
+                                        className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-mono mb-2"
+                                    />
+                                )}
                             </div>
 
-                            {status === 'success' && (
-                                <div className="flex items-center gap-2 text-emerald-600 text-sm bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg">
-                                    <CheckCircle className="w-4 h-4" />
-                                    {message}
-                                </div>
-                            )}
-
-                            {status === 'error' && (
-                                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {message}
-                                </div>
-                            )}
+                            {/* Agency Key Section */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-2">2. Echipa Agenție (Opțional)</h4>
+                                <p className="text-xs text-zinc-500 mb-2">Introduceți cheia de agenție pentru a importa administratorii.</p>
+                                {hasSavedAgencyKey ? (
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 rounded-lg text-sm flex items-center gap-2">
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span>Cheie Agenție salvată.</span>
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={agencyApiKey}
+                                        onChange={(e) => setAgencyApiKey(e.target.value)}
+                                        placeholder="Agency API Key (GHL V1)"
+                                        className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-mono"
+                                    />
+                                )}
+                            </div>
 
                             <div className="flex justify-end gap-3 mt-4">
                                 <button
@@ -136,7 +143,7 @@ export default function GHLSyncButton() {
                                 </button>
                                 <button
                                     onClick={handleSync}
-                                    disabled={loading || (!apiKey && !hasSavedKey)}
+                                    disabled={loading || ((!apiKey && !hasSavedKey) && (!agencyApiKey && !hasSavedAgencyKey))}
                                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}
