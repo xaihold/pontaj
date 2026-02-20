@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Key, RefreshCw, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Key, RefreshCw, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 
 interface SetupState {
@@ -12,27 +12,45 @@ interface SetupState {
 
 export default function FirstRunSetup() {
     const { user, isAdmin, urlClaimsAdmin } = useAuth();
-    const [setup, setSetup] = useState<SetupState>({ checked: false, hasKey: false, hasAgencyKey: false });
-    const [isExpanded, setIsExpanded] = useState(false);
+
+    // Manual location/company ID inputs — used when URL doesn't provide them
+    const [manualLocationId, setManualLocationId] = useState('');
+    const [companyId, setCompanyId] = useState('');
     const [locationApiKey, setLocationApiKey] = useState('');
     const [agencyApiKey, setAgencyApiKey] = useState('');
+
+    const [setup, setSetup] = useState<SetupState>({ checked: false, hasKey: false, hasAgencyKey: false });
+    const [isExpanded, setIsExpanded] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<{ success: boolean; message: string; stats?: any } | null>(null);
+    const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    // Effective location ID: from URL, or manually entered, or from localStorage
+    const effectiveLocationId = user?.locationId
+        || manualLocationId.trim()
+        || (typeof window !== 'undefined' ? localStorage.getItem('pontaj_location_id') || '' : '');
 
     useEffect(() => {
-        if (!user?.locationId) return;
-        fetch(`/api/users/sync-ghl?locationId=${user.locationId}`)
+        if (!effectiveLocationId) {
+            // No location ID yet — auto-expand so user can enter it
+            setSetup({ checked: true, hasKey: false, hasAgencyKey: false });
+            setIsExpanded(true);
+            return;
+        }
+        fetch(`/api/users/sync-ghl?locationId=${effectiveLocationId}`)
             .then(r => r.json())
             .then(data => {
                 setSetup({ checked: true, hasKey: data.hasKey, hasAgencyKey: data.hasAgencyKey });
-                // Auto-expand if no keys saved yet
                 if (!data.hasKey && !data.hasAgencyKey) setIsExpanded(true);
             })
             .catch(() => setSetup({ checked: true, hasKey: false, hasAgencyKey: false }));
-    }, [user?.locationId]);
+    }, [effectiveLocationId]);
 
     const handleSync = async () => {
-        if (!user?.locationId) return;
+        const locId = effectiveLocationId;
+        if (!locId) {
+            setResult({ success: false, message: 'Introduceți un Location ID sau Company ID mai întâi.' });
+            return;
+        }
         if (!locationApiKey.trim() && !agencyApiKey.trim() && !setup.hasKey && !setup.hasAgencyKey) {
             setResult({ success: false, message: 'Introduceți cel puțin un API Key.' });
             return;
@@ -48,20 +66,28 @@ export default function FirstRunSetup() {
                 body: JSON.stringify({
                     apiKey: locationApiKey,
                     agencyApiKey,
-                    locationId: user.locationId,
-                    updatedBy: user.userName
+                    locationId: locId,
+                    companyId: companyId.trim() || undefined,
+                    updatedBy: user?.userName
                 })
             });
 
             const data = await res.json();
 
             if (res.ok) {
+                // Persist location ID to localStorage so next visit uses it
+                if (manualLocationId.trim()) {
+                    localStorage.setItem('pontaj_location_id', manualLocationId.trim());
+                }
                 setResult({
                     success: true,
-                    message: `✅ ${data.stats?.total ?? 0} utilizatori importați (${data.stats?.added ?? 0} noi, ${data.stats?.updated ?? 0} actualizați).`,
-                    stats: data.stats
+                    message: `✅ ${data.stats?.total ?? 0} utilizatori importați (${data.stats?.added ?? 0} noi, ${data.stats?.updated ?? 0} actualizați).`
                 });
-                setSetup(prev => ({ ...prev, hasKey: !!locationApiKey || prev.hasKey, hasAgencyKey: !!agencyApiKey || prev.hasAgencyKey }));
+                setSetup(prev => ({
+                    ...prev,
+                    hasKey: !!locationApiKey || prev.hasKey,
+                    hasAgencyKey: !!agencyApiKey || prev.hasAgencyKey
+                }));
                 setLocationApiKey('');
                 setAgencyApiKey('');
                 setTimeout(() => window.location.reload(), 2500);
@@ -75,17 +101,17 @@ export default function FirstRunSetup() {
         }
     };
 
-    // Show this component to admins (DB role) OR to users GHL identifies as admin in URL (first-run)
-    // Regular users never see this
-    const canSeeSetup = isAdmin || urlClaimsAdmin;
+    // First-run: show to EVERYONE when no API keys configured yet (the first admin sets things up).
+    // Once configured: show only to DB admins or URL-claimed admins.
+    // NEVER hide entirely — always keep visible as collapsed panel so keys can be updated anytime.
+    const isFreshLocation = setup.checked && !setup.hasKey && !setup.hasAgencyKey;
+    const canSeeSetup = isFreshLocation || isAdmin || urlClaimsAdmin;
     if (!canSeeSetup) return null;
-
-    // Don't render until we've checked API key status
     if (!setup.checked) return null;
-    // If both keys saved and panel was not explicitly opened, hide it (collapsed by default)
-    if (setup.hasKey && setup.hasAgencyKey && !isExpanded) return null;
+    // NOTE: Removed auto-hide when keys exist — setup panel is ALWAYS accessible.
 
     const isMissingKeys = !setup.hasKey && !setup.hasAgencyKey;
+    const isMissingLocationId = !effectiveLocationId;
 
     return (
         <div className={`rounded-2xl border overflow-hidden transition-all ${isMissingKeys
@@ -103,12 +129,16 @@ export default function FirstRunSetup() {
                     </div>
                     <div>
                         <p className={`font-semibold text-sm ${isMissingKeys ? 'text-amber-900 dark:text-amber-200' : 'text-indigo-900 dark:text-indigo-200'}`}>
-                            {isMissingKeys ? '⚠️ Configurare necesară — Sincronizare GHL' : 'Gestionare Chei API GHL'}
+                            {isMissingLocationId ? '⚠️ Location ID lipsă — Configurare necesară'
+                                : isMissingKeys ? '⚠️ Configurare necesară — Sincronizare GHL'
+                                    : 'Gestionare Chei API GHL'}
                         </p>
                         <p className="text-xs text-zinc-500 mt-0.5">
-                            {isMissingKeys
-                                ? 'Nicio cheie API salvată. Adăugați cheia pentru a importa utilizatorii.'
-                                : `Chei salvate: ${[setup.hasKey && 'Location', setup.hasAgencyKey && 'Agency'].filter(Boolean).join(' + ')}`
+                            {isMissingLocationId
+                                ? 'Introduceți Location ID-ul sub-account-ului sau Company ID-ul agenției.'
+                                : isMissingKeys
+                                    ? 'Nicio cheie API salvată. Adăugați cheia pentru a importa utilizatorii.'
+                                    : `Chei salvate: ${[setup.hasKey && 'Location', setup.hasAgencyKey && 'Agency'].filter(Boolean).join(' + ')}`
                             }
                         </p>
                     </div>
@@ -118,7 +148,57 @@ export default function FirstRunSetup() {
 
             {/* Expandable Form */}
             {isExpanded && (
-                <div className="px-6 pb-6 space-y-4 border-t border-inherit pt-4">
+                <div className="px-6 pb-6 space-y-5 border-t border-inherit pt-4">
+
+                    {/* Location / Company ID Section */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                        {/* Sub-account Location ID */}
+                        <div>
+                            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
+                                Location ID (Sub-account)
+                                {user?.locationId && <span className="ml-2 text-emerald-600 font-normal normal-case">✓ Din URL</span>}
+                            </label>
+                            <input
+                                type="text"
+                                value={user?.locationId || manualLocationId}
+                                onChange={e => !user?.locationId && setManualLocationId(e.target.value)}
+                                readOnly={!!user?.locationId}
+                                placeholder="Ex: AbCdEfGh1234567890"
+                                className={`w-full px-3 py-2.5 rounded-lg border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${user?.locationId
+                                    ? 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 cursor-not-allowed'
+                                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'
+                                    }`}
+                            />
+                            <p className="text-[10px] text-zinc-400 mt-1">
+                                {user?.locationId
+                                    ? 'Preluat automat din URL GHL.'
+                                    : 'Vizibil în URL-ul GHL: /v2/location/XXXXXXX/dashboard'}
+                            </p>
+                        </div>
+
+                        {/* Company ID (Agency) */}
+                        <div>
+                            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                                <Building2 className="w-3 h-3" />
+                                Company ID (Agenție) <span className="font-normal normal-case">(opțional)</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={companyId}
+                                onChange={e => setCompanyId(e.target.value)}
+                                placeholder="Ex: AbCdEfGh1234567890"
+                                className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                            <p className="text-[10px] text-zinc-400 mt-1">
+                                URL agenție: app.gohighlevel.com/v2/agency/<strong>COMPANY_ID</strong>/...
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-inherit" />
+
+                    {/* API Keys Section */}
                     <div className="grid md:grid-cols-2 gap-4">
                         {/* Location Key */}
                         <div>
@@ -130,10 +210,10 @@ export default function FirstRunSetup() {
                                 type="password"
                                 value={locationApiKey}
                                 onChange={e => setLocationApiKey(e.target.value)}
-                                placeholder={setup.hasKey ? '●●●●●●●● (lasă gol pentru a păstra)' : 'Private Integration Token (Location)'}
+                                placeholder={setup.hasKey ? '●●●●●●●● (lasă gol pentru a păstra)' : 'Private Integration Token — Location'}
                                 className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder-zinc-400"
                             />
-                            <p className="text-[10px] text-zinc-400 mt-1">GHL → Settings → API Keys → Location Level</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">GHL → (în sub-account) → Settings → Integrations → Private Integrations → Create Key</p>
                         </div>
 
                         {/* Agency Key */}
@@ -146,10 +226,10 @@ export default function FirstRunSetup() {
                                 type="password"
                                 value={agencyApiKey}
                                 onChange={e => setAgencyApiKey(e.target.value)}
-                                placeholder={setup.hasAgencyKey ? '●●●●●●●● (lasă gol pentru a păstra)' : 'Private Integration Token (Agency)'}
+                                placeholder={setup.hasAgencyKey ? '●●●●●●●● (lasă gol pentru a păstra)' : 'Private Integration Token — Agency'}
                                 className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder-zinc-400"
                             />
-                            <p className="text-[10px] text-zinc-400 mt-1">GHL → Agency Settings → API Keys → Agency Level</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">GHL → (nivel agenție) → Settings → API Keys → Create Key</p>
                         </div>
                     </div>
 
@@ -164,7 +244,7 @@ export default function FirstRunSetup() {
                     )}
 
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-zinc-400">Cheile sunt criptate și stocate în MongoDB.</p>
+                        <p className="text-xs text-zinc-400">Cheile sunt stocate criptat în MongoDB.</p>
                         <button
                             onClick={handleSync}
                             disabled={loading}
